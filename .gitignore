@@ -1,8 +1,8 @@
 node_modules
 package-lock.json
-cookies.*
-response.json
 screenshot.png
 creds.json
 results.html
-captures
+captures/*
+user-data/*
+output/*
