@@ -37,7 +37,7 @@ async function puppetLiharvest(){
     await page.goto('https://www.linkedin.com/sales/search/people',{waitUntil: 'networkidle0'})
     await page.type('#global-typeahead-search-input', "manager")
     await page.click('.global-typeahead__search-button')
-    await page.waitForSelector('#results')
+    await page.waitForSelector('.search-results__result-list')
     let finishedCrawling = false
     let crawlCounter = 0
     while( !finishedCrawling && crawlCounter < 1000 ) {
@@ -49,28 +49,31 @@ async function puppetLiharvest(){
                     let counter = 0;
                     let timer = setInterval(()=>{
                         counter++;
-                        window.scrollTo(0, document.body.scrollHeight)
-                        let prev = document.getElementsByClassName('search-results__pagination-next-button')
-                        let next = document.getElementsByClassName('search-results__pagination-next-button')
-                        console.log(`scroll-${counter}`, `next-${next.length}`, `prev-${prev.length}`)
-                        if(next.length > 0 || prev.length > 0){
+                        console.log('scrolling', window.scrollY + 500)
+                        let yScroll = Math.ceil(window.scrollY + 500)
+                        window.scrollTo({top: yScroll, behavior: 'smooth'})
+                        if(yScroll >= document.body.scrollHeight - window.innerHeight){
                             clearInterval(timer)
                             resolve()
                         }else{
-                            if(counter >= 10){
+                            console.log('condition', window.scrollY, document.body.scrollHeight - window.innerHeight)
+                            if(counter >= 100){
                                 reject()
                             }
                         }
-                    }, 1000)
+                    }, 500)
                 })
             })
         }catch(err){
             throw("Scrolling loop never completed.")
         }
-
+        await new Promise((resolve, reject)=>{
+            setTimeout(()=>{
+                resolve()
+            }, 3000)
+        })
         let pageContent = await page.content()
         captureResult(crawlCounter, pageContent)
-        console.log('got results')
         try{
             await page.click('.search-results__pagination-next-button')
             await new Promise((resolve, reject)=>{
@@ -78,7 +81,7 @@ async function puppetLiharvest(){
                     resolve()
                 }, 1000);
             })
-            await page.waitForSelector('#results')
+            await page.waitForSelector('.search-results__result-list')
         }catch(err){
             finishedCrawling = true;
             throw("Crawling ended.")
