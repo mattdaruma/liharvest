@@ -1,31 +1,34 @@
 const puppeteer = require('puppeteer')
 const fs = require('fs');
 const { finished } = require('stream');
-function captureResult(counter, content){
-    console.log(`capture ${counter}`)
-    let countString = counter.toString()
-    while(countString.length < 4) { countString = `0${countString}` }
-    fs.writeFileSync(`./captures/${countString}-page.html`, content)
+const cheerio = require('cheerio')
+const csvGenerator = require("./csv-generator.js")
+let csvGen = new csvGenerator("li-harvest")
+csvGen.setHeaders([
+    'Name',
+    'Title',
+    'Company',
+    'Tenure',
+    'Location',
+    'ProfileUrl'
+])
+function cleanString(input){
+    return input.replace(/[^\x00-\x7F]/g, "").replace(/\s+/g, " ").replace('"', "").trim()
 }
-
-
-async function autoScroll(page){
-    await page.evaluate(async () => {
-        await new Promise((resolve, reject) => {
-            var totalHeight = 0;
-            var distance = 100;
-            var timer = setInterval(() => {
-                var scrollHeight = document.body.scrollHeight;
-                window.scrollBy(0, distance);
-                totalHeight += distance;
-
-                if(totalHeight >= scrollHeight){
-                    clearInterval(timer);
-                    resolve();
-                }
-            }, 100);
-        });
-    });
+function getCsvValues(pageContent){
+    let $ = cheerio.load(pageContent)
+    let csv = "";
+    $('.search-results__result-item').each((i, el) => {
+        let name = cleanString($(el).find('.result-lockup__name').text())
+        let titleCompany = cleanString($(el).find('.result-lockup__highlight-keyword').text())
+        let titleCompanySplit = titleCompany.split(' at ')
+        let companySplit = titleCompanySplit[1].split(' Go to ')
+        let tenure = cleanString($(el).find('.result-lockup__tenure').parent().text())
+        let location = cleanString($(el).find('.result-lockup__misc-list').parent().text())
+        let profile = $(el).find('.result-lockup__name').find('a.ember-view').prop("href")
+        csv += `"${name}","${titleCompanySplit[0]}", "${companySplit[0]}","${tenure}","${location}","https://www.linkedin.com${profile}"\r\n`
+    })
+    return csv;
 }
 async function puppetLiharvest(){
     let browser = await puppeteer.launch({
@@ -35,28 +38,39 @@ async function puppetLiharvest(){
        })
     let page = await browser.newPage()
     await page.goto('https://www.linkedin.com/sales/search/people',{waitUntil: 'networkidle0'})
-    await page.type('#global-typeahead-search-input', "manager")
-    await page.click('.global-typeahead__search-button')
-    await page.waitForSelector('.search-results__result-list')
+    let listenForResults = async ()=>{
+        return new Promise((resolve, reject)=>{
+            let listenCounter = 0
+            let checkResults = async ()=>{
+                try{
+                    await page.waitForSelector('.search-results__result-list')
+                    resolve(true)
+                }catch(err){
+                    listenCounter++
+                    console.warn('Results not found', listenCounter)
+                    checkResults()
+                }
+            }
+            checkResults()
+        })
+    }
+    await listenForResults()
     let finishedCrawling = false
     let crawlCounter = 0
     while( !finishedCrawling && crawlCounter < 1000 ) {
         crawlCounter++
-        console.log(`crawl-${crawlCounter}`)
         try{
             await page.evaluate(async ()=>{
                 await new Promise((resolve, reject)=>{
                     let counter = 0;
                     let timer = setInterval(()=>{
                         counter++;
-                        console.log('scrolling', window.scrollY + 500)
                         let yScroll = Math.ceil(window.scrollY + 500)
                         window.scrollTo({top: yScroll, behavior: 'smooth'})
                         if(yScroll >= document.body.scrollHeight - window.innerHeight){
                             clearInterval(timer)
                             resolve()
                         }else{
-                            console.log('condition', window.scrollY, document.body.scrollHeight - window.innerHeight)
                             if(counter >= 100){
                                 reject()
                             }
@@ -73,7 +87,8 @@ async function puppetLiharvest(){
             }, 3000)
         })
         let pageContent = await page.content()
-        captureResult(crawlCounter, pageContent)
+        let csvLine = getCsvValues(pageContent)
+        csvGen.addLine(csvLine)
         try{
             await page.click('.search-results__pagination-next-button')
             await new Promise((resolve, reject)=>{
