@@ -7,7 +7,7 @@ function csvGenerator(fileName){
     if(!fs.existsSync("./csvs")) fs.mkdir('./csvs')
     let readFile = ()=>{
         if(fs.existsSync(filePath)){
-            let content = fs.readFileSync(filePath, 'utf8')
+            let content = fs.readFileSync(filePath)
             lines = content.split("\r\n")
             headers = lines.shift().split(',')
             while(lines[0]=="\r\n") lines.shift()
