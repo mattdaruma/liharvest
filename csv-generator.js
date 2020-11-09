@@ -4,7 +4,7 @@ function csvGenerator(fileName){
     let lines = []
     let headers = []
     let filePath = `./csvs/${fileName}.csv`
-    if(!fs.existsSync("./csvs")) fs.mkdir('./csvs')
+    if(!fs.existsSync("./csvs")) fs.mkdirSync('./csvs')
     let readFile = ()=>{
         if(fs.existsSync(filePath)){
             let content = fs.readFileSync(filePath)
